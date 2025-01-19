@@ -1,0 +1,106 @@
+# PIPELINE DEFINITION
+# Name: train-model
+# Inputs:
+#    X_train: system.Dataset
+#    y_train: system.Dataset
+# Outputs:
+#    model: system.Model
+components:
+  comp-train-model:
+    executorLabel: exec-train-model
+    inputDefinitions:
+      artifacts:
+        X_train:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        y_train:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-train-model:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - train_model
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.11.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef train_model(\n    X_train: dsl.Input[dsl.Dataset],\n    y_train:\
+          \ dsl.Input[dsl.Dataset],\n    model: dsl.Output[dsl.Model]\n):\n  import\
+          \ numpy as np\n  import pickle\n  from sklearn.linear_model import LogisticRegression\n\
+          \  import os\n\n  X_train = np.load(path['X_train'], allow_pickle = True)\n\
+          \  y_train = np.load(path['y_train'], allow_pickle = True)\n\n  classifier\
+          \ = LogisticRegression(max_iter=500)\n  classifier.fit(X_train, y_train)\n\
+          \n  os.makedirs(os.path.dirname(model_output_path), exist_ok = True)\n \
+          \ with open(model.path, 'wb') as f:\n    pickle.dump(classifier, f)\n  print(\"\
+          Model Training Completed\") \n\n"
+        image: 'python: 3.12'
+pipelineInfo:
+  name: train-model
+root:
+  dag:
+    outputs:
+      artifacts:
+        model:
+          artifactSelectors:
+          - outputArtifactKey: model
+            producerSubtask: train-model
+    tasks:
+      train-model:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-train-model
+        inputs:
+          artifacts:
+            X_train:
+              componentInputArtifact: X_train
+            y_train:
+              componentInputArtifact: y_train
+        taskInfo:
+          name: train-model
+  inputDefinitions:
+    artifacts:
+      X_train:
+        artifactType:
+          schemaTitle: system.Dataset
+          schemaVersion: 0.0.1
+      y_train:
+        artifactType:
+          schemaTitle: system.Dataset
+          schemaVersion: 0.0.1
+  outputDefinitions:
+    artifacts:
+      model:
+        artifactType:
+          schemaTitle: system.Model
+          schemaVersion: 0.0.1
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.11.0

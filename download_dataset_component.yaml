@@ -1,0 +1,89 @@
+# PIPELINE DEFINITION
+# Name: download-dataset
+# Inputs:
+#    url: str
+# Outputs:
+#    dataset: system.Dataset
+components:
+  comp-download-dataset:
+    executorLabel: exec-download-dataset
+    inputDefinitions:
+      parameters:
+        url:
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        dataset:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-download-dataset:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - download_dataset
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.11.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef download_dataset(url: str, dataset: dsl.Output[dsl.Dataset])\
+          \ :\n    import pandas as pd\n    import os\n\n    # Create the directory\
+          \ if it doesn't exist\n    os.makedirs(os.path.dirname(output_path), exist_ok=True)\n\
+          \n    # Download the dataset\n    df = pd.read_csv(url)\n\n    # Save the\
+          \ dataset locally\n    df.to_csv(dataset.path, index=False)\n    print(f\"\
+          Data saved at {dataset.path}\")\n\n    # Return the DataFrame\n    return\
+          \ dataset.path\n\n"
+        image: python:3.12
+pipelineInfo:
+  name: download-dataset
+root:
+  dag:
+    outputs:
+      artifacts:
+        dataset:
+          artifactSelectors:
+          - outputArtifactKey: dataset
+            producerSubtask: download-dataset
+    tasks:
+      download-dataset:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-download-dataset
+        inputs:
+          parameters:
+            url:
+              componentInputParameter: url
+        taskInfo:
+          name: download-dataset
+  inputDefinitions:
+    parameters:
+      url:
+        parameterType: STRING
+  outputDefinitions:
+    artifacts:
+      dataset:
+        artifactType:
+          schemaTitle: system.Dataset
+          schemaVersion: 0.0.1
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.11.0

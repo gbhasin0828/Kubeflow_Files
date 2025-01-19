@@ -1,0 +1,290 @@
+# PIPELINE DEFINITION
+# Name: mlops-pipeline
+# Inputs:
+#    output_path: str
+#    url: str
+components:
+  comp-download-dataset:
+    executorLabel: exec-download-dataset
+    inputDefinitions:
+      parameters:
+        url:
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        dataset:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+  comp-preprocess-dataset:
+    executorLabel: exec-preprocess-dataset
+    inputDefinitions:
+      artifacts:
+        dataset:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        preprocessed_dataset:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+  comp-train-model:
+    executorLabel: exec-train-model
+    inputDefinitions:
+      artifacts:
+        X_train:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        y_train:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+  comp-train-test-split:
+    executorLabel: exec-train-test-split
+    inputDefinitions:
+      artifacts:
+        dataframe:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        X_test:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        X_train:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        y_test:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        y_train:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-download-dataset:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - download_dataset
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.11.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef download_dataset(url: str, dataset: dsl.Output[dsl.Dataset])\
+          \ :\n    import pandas as pd\n    import os\n\n    # Create the directory\
+          \ if it doesn't exist\n    os.makedirs(os.path.dirname(output_path), exist_ok=True)\n\
+          \n    # Download the dataset\n    df = pd.read_csv(url)\n\n    # Save the\
+          \ dataset locally\n    df.to_csv(dataset.path, index=False)\n    print(f\"\
+          Data saved at {dataset.path}\")\n\n    # Return the DataFrame\n    return\
+          \ dataset.path\n\n"
+        image: python:3.12
+    exec-preprocess-dataset:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - preprocess_dataset
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.11.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef preprocess_dataset(dataset: dsl.Input[dsl.Dataset], preprocessed_dataset:\
+          \ dsl.Output[dsl.Dataset]):\n  import pandas as pd\n  dataset.columns =\
+          \ ['sepal_length', 'sepal_width', 'petal_length', 'petal_width', 'class']\n\
+          \  dataset.to_csv(preprocessed_dataset.path, index = False)\n  return preprocessed_dataset.path\n\
+          \n"
+        image: python:3.12
+    exec-train-model:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - train_model
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.11.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef train_model(\n    X_train: dsl.Input[dsl.Dataset],\n    y_train:\
+          \ dsl.Input[dsl.Dataset],\n    model: dsl.Output[dsl.Model]\n):\n  import\
+          \ numpy as np\n  import pickle\n  from sklearn.linear_model import LogisticRegression\n\
+          \  import os\n\n  X_train = np.load(path['X_train'], allow_pickle = True)\n\
+          \  y_train = np.load(path['y_train'], allow_pickle = True)\n\n  classifier\
+          \ = LogisticRegression(max_iter=500)\n  classifier.fit(X_train, y_train)\n\
+          \n  os.makedirs(os.path.dirname(model_output_path), exist_ok = True)\n \
+          \ with open(model.path, 'wb') as f:\n    pickle.dump(classifier, f)\n  print(\"\
+          Model Training Completed\") \n\n"
+        image: 'python: 3.12'
+    exec-train-test-split:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - train_test_split
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.11.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef train_test_split(\n    dataframe: dsl.Input[dsl.Dataset],\n \
+          \   X_train: dsl.Output[dsl.Dataset],\n    X_test : dsl.Output[dsl.Dataset],\n\
+          \    y_train: dsl.Output[dsl.Dataset],\n    y_test: dsl.Output[dsl.Dataset]\n\
+          \    ):\n  import pandas as pd\n  import numpy as np\n  from sklearn.model_selection\
+          \ import train_test_split\n  import os\n\n  df = pd.read_csv(dataframe.path)\n\
+          \n\n  target_column = 'class'\n\n  X = df.loc[:, df.columns != target_column]\n\
+          \  y = df.loc[:, df.columns == target_column]\n\n  X_train, X_test, y_train,\
+          \ y_test = train_test_split(X, y, test_size=0.3, stratify=y, random_state=47)\n\
+          \n  np.save(X_train.path, X_train)\n  np.save(X_test.path, X_test)\n  np.save(y_train.path,\
+          \ y_train)\n  np.save(y_test.path, y_test)\n\n"
+        image: python:3.12
+pipelineInfo:
+  name: mlops-pipeline
+root:
+  dag:
+    tasks:
+      download-dataset:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-download-dataset
+        inputs:
+          parameters:
+            url:
+              componentInputParameter: url
+        taskInfo:
+          name: download-dataset
+      preprocess-dataset:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-preprocess-dataset
+        dependentTasks:
+        - download-dataset
+        inputs:
+          artifacts:
+            dataset:
+              taskOutputArtifact:
+                outputArtifactKey: dataset
+                producerTask: download-dataset
+        taskInfo:
+          name: preprocess-dataset
+      train-model:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-train-model
+        dependentTasks:
+        - train-test-split
+        inputs:
+          artifacts:
+            X_train:
+              taskOutputArtifact:
+                outputArtifactKey: X_train
+                producerTask: train-test-split
+            y_train:
+              taskOutputArtifact:
+                outputArtifactKey: y_train
+                producerTask: train-test-split
+        taskInfo:
+          name: train-model
+      train-test-split:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-train-test-split
+        dependentTasks:
+        - preprocess-dataset
+        inputs:
+          artifacts:
+            dataframe:
+              taskOutputArtifact:
+                outputArtifactKey: preprocessed_dataset
+                producerTask: preprocess-dataset
+        taskInfo:
+          name: train-test-split
+  inputDefinitions:
+    parameters:
+      output_path:
+        parameterType: STRING
+      url:
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.11.0
